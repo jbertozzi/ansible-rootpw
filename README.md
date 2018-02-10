@@ -26,7 +26,7 @@ Role Variables
 * `{{ bytes }}`: number of bytes returned in base64 by openssl when generating the password
 * `{{ salt }}`: salt used to generate the password
 * `{{ master_pw }}`: ansible-vault secret for the generated file(s) encrypted
-* `{{ vault_directory }}`: where to store the encrypted file
+* `{{ vault_directory }}`: where to store the encrypted file(s)
 
 You probably want those variables in a file protected by Ansible Vault:
 
