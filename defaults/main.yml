@@ -1,0 +1,6 @@
+---
+# defaults file for rootpw
+bytes: 7
+salt: mysalt
+master_pw: mysecret
+vault_directory: ./host_vars

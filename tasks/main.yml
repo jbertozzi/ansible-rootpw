@@ -1,0 +1,45 @@
+---
+- name: generate random password
+  shell: openssl rand -base64 {{ bytes }} | openssl passwd -stdin -salt {{ salt }}
+  register: password
+  changed_when: false
+  delegate_to: localhost
+
+- name: generate crypt
+  command:  python -c 'import crypt; print crypt.crypt("{{password.stdout}}")'
+  register: encrypted_password
+  changed_when: false
+  delegate_to: localhost
+
+- name: set password
+  user:
+    name: root
+    password: "{{ encrypted_password.stdout }}"
+    update_password: always
+
+- name: create host_var
+  template:
+    src: ./templates/server.yml.j2
+    dest: "{{ vault_directory }}/{{ inventory_hostname }}.yml"
+  delegate_to: localhost
+  become: false
+
+- name: create temp file
+  copy:
+    dest: /var/tmp/.{{ inventory_hostname }}
+    content: "{{ master_pw }}"
+    mode: 0600
+  become: false
+  delegate_to: localhost
+
+- name: encrypt var file
+  command: ansible-vault encrypt ./host_vars/{{inventory_hostname}}.yml --vault-password-file=/var/tmp/.{{ inventory_hostname }}
+  delegate_to: localhost
+  become: false
+
+- name: delete temp file
+  file:
+    path: /var/tmp/.{{ inventory_hostname }}
+    state: absent
+  delegate_to: localhost
+  become: false
