@@ -7,7 +7,7 @@ The role does the following on the managed servers:
 * updates root password on the managed node
 * writes the root password in a encrypted file using ansible-vault on the control node
 
-The password is generated using a pre-defined salt and stored in a YAML file in `host_vars/{{inventory_hostname}}.yml` containg one key named `root_pw`. One file per host will be generated.
+The password is generated using a pre-defined salt and is stored in a YAML file in `{{ vault_directory }}/{{inventory_hostname}}.yml` containg one key named `root_pw`. One file per host will be generated.
 
 Retrieving the root password for a given server:
 
