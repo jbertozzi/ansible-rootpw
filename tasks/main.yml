@@ -23,7 +23,7 @@
 # /!\ make sure the 'force_handlers' is set to true either in the play or in your ansible.cfg
 - name: create temporary vault password file
   copy:
-    dest: /var/tmp/.{{ inventory_hostname }}
+    dest: "{{ vault_password_file }}"
     content: "{{ master_pw }}"
     mode: 0600
   become: false
@@ -40,26 +40,30 @@
   register: backup
 
 - name: encrypt vault file for the server
-  command: ansible-vault encrypt {{ vault_directory }}/{{inventory_hostname}}.yml --vault-password-file=/var/tmp/.{{ inventory_hostname }}
+  command: ansible-vault encrypt {{ vault_directory }}/{{inventory_hostname}}.yml --vault-password-file={{ vault_password_file }}
   delegate_to: localhost
   become: false
 
-- name: change the root password
-  block:
+- block:
   - name: set password
     user:
       name: root
       password: "{{ encrypted_password.stdout }}"
       update_password: always
-  - name: fake command
-    command: /bin/false
+    register: ssh
   rescue:
+    # an error occured during password change on the server, roll back the appropriate vault file in the local vault_directory
+    # Ansible try to decrypt the file backed-up with vault password used to encrypt the variable file which is not necessary the same as the one used to encrypt remote root password locally. This is why the module 'command' is used instead of 'copy'
     - name: copy the old vault file for the server
-      copy:
-        dest: "{{ vault_directory }}/{{ inventory_hostname }}.yml"
-        src: "{{ backup.backup_file }}"
+      command: cp {{ backup.backup_file }} {{ vault_directory }}/{{ inventory_hostname }}.yml
       delegate_to: localhost
       become: false
-    # an error occured during password change on the server, roll back the appropriate vault file in the local vault_directory
-  # copy the old file back
-     
+    # handler seems no to run despite the 'force_handler' if we end up in the rescue, so the handler is duplicated...
+    - name: delete temporary vault file
+      file:
+        path: "{{ vault_password_file }}"
+        state: absent
+      delegate_to: localhost
+      become: false
+
+
