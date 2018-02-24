@@ -1,2 +1,9 @@
 ---
 # handlers file for rootpw
+- name: delete temporary vault file
+  file:
+    path: /var/tmp/.{{ inventory_hostname }}
+    state: absent
+  delegate_to: localhost
+  become: false
+

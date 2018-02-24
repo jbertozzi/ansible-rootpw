@@ -1,19 +1,23 @@
 rootpw
 =========
 
-The role does the following on the managed servers:
+The role does the following:
 
 * generates a random password on the control node
-* updates root password on the managed node
 * writes the root password in a encrypted file using ansible-vault on the control node
+* updates root password on the managed node
 
 The password is generated using a pre-defined salt and is stored in a YAML file in `{{ vault_directory }}/{{inventory_hostname}}.yml` containg one key named `root_pw`. One file per host will be generated.
 
 Retrieving the root password for a given server:
 
 ```
-ansible-vault view host_vars/myserver.yml
+ansible-vault view passwords/myserver.yml
 ```
+
+The role has been written to make sure the password set on the target servers is aligned with the one written in the vault files. The files are backed-up as a precaution. 
+
+Not setting `force_handlers: true` in the play can lead to cases where an unrelated failure can leave the `{{ master_pw }}` written in a plain text on the control node.
 
 Requirements
 ------------
@@ -40,6 +44,8 @@ ansible-vault encrypt defaults/main.yml
 New Vault password:                                                                                                   
 ```
 
+It is recommended to avoid using any default Ansible variable directory like 'hosts_var', 'group_vars' or 'vars' for the variable `{{ vault_directory }}`.
+
 Dependencies
 ------------
 
@@ -48,20 +54,34 @@ No dependency.
 Example Playbook
 ----------------
 
-Using variables stored in (vault) file:
+Using variables stored in vault file (recommended):
 
 ``` 
-  - hosts: servers
-    roles:
-    - { role: rootpw }
+cd rootpw
+cat <<EOF>defaults/main.yml
+salt: toto
+master_pw: tata
+EOF
+ansible-vault encrypt defaults/main.yml
+New Vault password:
+cat playbook.yml
+---
+- name: apply rootpw role
+  hosts: servers
+  force_handlers: true
+  roles:
+  - { role: rootpw }
 ```
 
 Giving the variables in the playbook:
 
-``` 
-  - hosts: servers
-    roles:
-    - { role: rootpw, salt: 'my_salt', master_pw: 'mysupersecretincleartext' }
+```
+---
+- name: apply rootpw role
+  hosts: servers
+  force_handlers: true
+  roles:
+  - { role: rootpw, salt: 'my_salt', master_pw: 'mysupersecretincleartext' }
 ```
 
 License

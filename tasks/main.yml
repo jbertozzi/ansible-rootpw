@@ -1,45 +1,65 @@
 ---
+
+# a password is randomly generated using some parameters (number of bytes and the salt)
 - name: generate random password
   shell: openssl rand -base64 {{ bytes }} | openssl passwd -stdin -salt {{ salt }}
   register: password
   changed_when: false
   delegate_to: localhost
 
-- name: generate crypt
+# the password is then hashed for future use as the user module does not accept the plain text password
+- name: generate crypt for the password
   command:  python -c 'import crypt; print crypt.crypt("{{password.stdout}}")'
   register: encrypted_password
   changed_when: false
   delegate_to: localhost
 
-- name: set password
-  user:
-    name: root
-    password: "{{ encrypted_password.stdout }}"
-    update_password: always
+#- name: get old password
+#  shell: grep root /etc/shadow | cut -d ':' -f2
+#  register: old_encrypted_password
 
-- name: create host_var
-  template:
-    src: ./templates/server.yml.j2
-    dest: "{{ vault_directory }}/{{ inventory_hostname }}.yml"
-  delegate_to: localhost
-  become: false
-
-- name: create temp file
+# ansible vault does not accept stdin, so we have the put the vault password in a temporary file
+# the handler makes sure the file will be deleted.
+# /!\ make sure the 'force_handlers' is set to true either in the play or in your ansible.cfg
+- name: create temporary vault password file
   copy:
     dest: /var/tmp/.{{ inventory_hostname }}
     content: "{{ master_pw }}"
     mode: 0600
   become: false
   delegate_to: localhost
+  notify: delete temporary vault file
 
-- name: encrypt var file
-  command: ansible-vault encrypt ./host_vars/{{inventory_hostname}}.yml --vault-password-file=/var/tmp/.{{ inventory_hostname }}
+- name: create vault file for the server
+  template:
+    src: ./templates/server.yml.j2
+    dest: "{{ vault_directory }}/{{ inventory_hostname }}.yml"
+    backup: yes
+  delegate_to: localhost
+  become: false
+  register: backup
+
+- name: encrypt vault file for the server
+  command: ansible-vault encrypt {{ vault_directory }}/{{inventory_hostname}}.yml --vault-password-file=/var/tmp/.{{ inventory_hostname }}
   delegate_to: localhost
   become: false
 
-- name: delete temp file
-  file:
-    path: /var/tmp/.{{ inventory_hostname }}
-    state: absent
-  delegate_to: localhost
-  become: false
+- name: change the root password
+  block:
+  - name: set password
+    user:
+      name: root
+      password: "{{ encrypted_password.stdout }}"
+      update_password: always
+  - name: fake command
+    command: /bin/false
+  rescue:
+    - name: copy the old vault file for the server
+      copy:
+        dest: "{{ vault_directory }}/{{ inventory_hostname }}.yml"
+        src: "{{ backup.backup_file }}"
+      delegate_to: localhost
+      become: false
+    # an error occured during password change on the server, roll back the appropriate vault file in the local vault_directory
+  # copy the old file back
+     
